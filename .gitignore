@@ -1,9 +1,37 @@
+# Virtual environments
 venv/
+backend/venv/
+.venv/
 
+# Environment files
+.env
 frontend/.env
-
 backend/.env
 
-backend/venv/
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 
-backend/app/__pycache__/
+# Node
+node_modules/
+frontend/node_modules/
+
+# Build outputs
+frontend/dist/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel/
