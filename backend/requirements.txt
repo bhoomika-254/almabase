@@ -1,0 +1,35 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+sqlalchemy[asyncio]
+asyncpg
+supabase
+psycopg2-binary
+
+# Auth
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1
+python-multipart
+pydantic[email]
+email-validator
+
+# Document parsing
+pdfplumber
+PyPDF2
+pytesseract
+Pillow
+python-docx
+markdown
+
+# AI
+groq
+
+# Export
+reportlab
+jinja2
+openpyxl
+
+# Utilities
+httpx
+aiofiles

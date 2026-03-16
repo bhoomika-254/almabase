@@ -1,0 +1,13 @@
+Question Number,Question Text
+1,Is EduPlatform FERPA compliant? Please provide details of your compliance status and any third-party verification.
+2,What encryption standards do you use for data at rest and data in transit?
+3,What is your uptime SLA and what are your Recovery Time Objective (RTO) and Recovery Point Objective (RPO)?
+4,How long do you retain student records after a student graduates or leaves the institution?
+5,Does EduPlatform comply with GDPR? What mechanisms are available for EU-based institutions?
+6,What authentication methods and access control mechanisms does EduPlatform support?
+7,Where is student data physically stored? Are there options for data residency?
+8,What accessibility standards does EduPlatform comply with? Are you WCAG 2.1 AA compliant?
+9,How does EduPlatform handle security incidents and data breaches? What is your notification timeline?
+10,What third-party sub-processors have access to student data?
+11,Does EduPlatform comply with COPPA for institutions serving students under 13?
+12,What certifications does EduPlatform hold (e.g. SOC 2, ISO 27001)?
