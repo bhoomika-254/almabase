@@ -179,7 +179,7 @@ def _run_generation(
                     "candidate_id": 1,
                     "generation_strategy": "detailed",
                     "question_text": f"Question {q_num}",
-                    "answer": "Not present in the document",
+                    "answer": "Not found in the provided documents",
                     "confidence_score": 0.0,
                     "not_found": True,
                     "raw_citations": [],
@@ -197,14 +197,31 @@ def _run_generation(
                     "generation_strategy": cand["generation_strategy"],
                     "answer": cand["answer"],
                     "confidence_score": confidence,
+                    "hallucination_risk": hall_risk,
                     "not_found": cand["not_found"],
                     "citations": cit,
                     "evidence_snippets": snippets,
                 })
 
-            print(f"[GENERATION] Q{q_num} processed: {q_text[:60]!r}")
+            print(f"[GENERATION] Q{q_num} processed: {q_text[:60]!r}, confidence={processed_candidates[0]['confidence_score']}, hallucination_risk={processed_candidates[0].get('hallucination_risk', 0)}")
+            
             primary = processed_candidates[0]
-            is_not_found = all(c["not_found"] for c in processed_candidates)
+            
+            # STRICT VALIDATION: Check if answer should be rejected as hallucination
+            confidence = primary["confidence_score"]
+            hallucination_risk = primary.get("hallucination_risk", 0.0)
+            has_citations = len(primary["citations"]) > 0
+            has_valid_citations = any(c.get("validated", False) for c in primary["citations"])
+            
+            # Reject answer if it fails validation
+            if confidence < 0.2 or hallucination_risk > 0.7 or (not has_valid_citations and has_citations):
+                print(f"[VALIDATION] Q{q_num} REJECTED: confidence={confidence}, hall_risk={hallucination_risk}, valid_cit={has_valid_citations}")
+                primary["answer"] = "Not found in the provided documents"
+                primary["confidence_score"] = 0.0
+                primary["not_found"] = True
+                is_not_found = True
+            else:
+                is_not_found = all(c["not_found"] for c in processed_candidates)
 
             if not is_not_found:
                 answered_count += 1

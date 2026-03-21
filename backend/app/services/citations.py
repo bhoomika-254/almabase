@@ -154,23 +154,29 @@ def calculate_confidence(
 ) -> float:
     """
     Calculate final confidence score for an answer based on citations.
+    STRICT MODE: Answers with NO verified citations get 0.0 confidence.
     """
     if not_found:
         return 0.0
 
+    # CRITICAL: If no citations at all, answer is unverified hallucination
     if not citations:
-        return 0.25
+        print("[CITATION] WARNING: Answer has ZERO citations - marked as unverified (0.0 confidence)")
+        return 0.0
 
+    # Count verified vs unverified citations
     validated = [c for c in citations if c.get("validated", False)]
     unvalidated = [c for c in citations if not c.get("validated", False)]
 
-    # Validated citations score full; unvalidated still score 0.6 because
-    # the LLM found the right document — the quote just wasn't verbatim
-    citation_score = (len(validated) + len(unvalidated) * 0.6) / len(citations)
+    # STRICT: Need at least ONE verified citation to claim confidence
+    if len(validated) == 0:
+        print(f"[CITATION] WARNING: Answer has {len(unvalidated)} unverified citations, 0 validated - marked as high risk (0.1 confidence)")
+        return 0.1  # Very low confidence if no validated citations
 
-    # Softer density check: expect 1 citation per 3 sentences, not 1-per-1
+    # If we have validated citations, calculate normally
+    citation_score = (len(validated) + len(unvalidated) * 0.4) / len(citations)
     answer_sentences = max(1, len([s for s in answer.split(".") if s.strip()]))
     citation_density = min(1.0, len(citations) / max(answer_sentences / 3, 1))
 
-    confidence = citation_score * 0.75 + citation_density * 0.25
-    return round(min(0.99, max(0.25, confidence)), 2)
+    confidence = citation_score * 0.8 + citation_density * 0.2
+    return round(min(0.99, max(0.1, confidence)), 2)

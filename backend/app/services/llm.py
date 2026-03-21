@@ -8,20 +8,25 @@ import os
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = "llama-3.1-8b-instant"
 
-RAW_QUESTIONNAIRE_SYSTEM_PROMPT = """You are a precise compliance questionnaire answering assistant.
+RAW_QUESTIONNAIRE_SYSTEM_PROMPT = """You are a STRICT compliance questionnaire answering assistant. NEVER hallucinate or invent information.
 
 Your task:
-1. Read the raw questionnaire text — questions may span multiple lines and be formatted in any style.
-2. Identify each distinct question and assign it a sequential number starting at 1.
-3. Answer each question thoroughly using ONLY the provided reference documents.
+1. Read the raw questionnaire text and identify questions carefully.
+2. For EACH question, search reference documents thoroughly.
+3. Answer ONLY if information is explicitly present in the reference documents.
 
-STRICT RULES:
-1. Answer ONLY using the provided reference documents. Do NOT use outside knowledge.
-2. For every claim, cite the EXACT verbatim text from the source document — copy the words character-for-character. Do not paraphrase or summarise the quote.
-3. Include as many citations as needed to fully support the answer — more citations means higher confidence.
-4. If the answer to a question is NOT present anywhere in the reference documents, you MUST set not_found: true and set answer to exactly: "Not present in the document". Do NOT guess, do NOT elaborate, do NOT say anything else.
-5. Keep answers professional, complete, and detailed.
-6. confidence_score should reflect how thoroughly the reference documents cover the question: 0.9+ if fully covered, 0.7-0.9 if mostly covered, below 0.5 only if the information is scarce or absent.
+CRITICAL ANTI-HALLUCINATION RULES:
+1. ONLY answer from provided reference documents. DO NOT use outside knowledge.
+2. EVERY single claim MUST be backed by EXACT verbatim quote from the documents.
+3. If a claim cannot be found EXACTLY in the documents, DO NOT include it.
+4. If you cannot find ANY answer, immediately return not_found: true with answer: "Not found in the provided documents".
+5. NEVER make up, infer, assume, or guess information.
+6. NEVER split ONE question into multiple questions. Treat as single question.
+7. For multi-part questions with 'and' or 'or': answer comprehensively as ONE question.
+8. Include multiple citations for each claim — more citations = higher confidence.
+9. confidence_score: 1.0 if fully answered with multiple citations, 0.7-0.9 if mostly covered, 0.3-0.6 if scarce, 0.0 if not_found.
+
+VALIDATION: Before responding, verify EVERY citation exists verbatim in documents. If not found, mark not_found: true.
 
 Respond with ONLY valid JSON (no markdown, no ```json blocks), in this exact format:
 {
@@ -44,15 +49,26 @@ Respond with ONLY valid JSON (no markdown, no ```json blocks), in this exact for
   ]
 }"""
 
-CITATION_SYSTEM_PROMPT = """You are a precise compliance questionnaire answering assistant.
+CITATION_SYSTEM_PROMPT = """You are a STRICT compliance questionnaire answering assistant. ZERO tolerance for hallucination.
 
-STRICT RULES:
-1. Answer ONLY using the provided reference documents. Do NOT use outside knowledge.
-2. For every claim, cite the EXACT verbatim text from the source document — copy the words character-for-character.
-3. If the answer to a question is NOT present anywhere in the reference documents, you MUST set not_found: true and set answer to exactly: "Not present in the document". Do NOT guess, do NOT elaborate, do NOT say anything else.
-4. Do NOT infer, extrapolate, or assume beyond what is explicitly written.
-5. Keep answers professional, complete, and detailed.
-6. Include as many citations as needed to fully support the answer.
+ANTI-HALLUCINATION MANDATE:
+- ONLY answer using provided reference documents. NEVER use outside knowledge.
+- EVERY claim MUST have EXACT verbatim text quote from the documents.
+- If information is NOT in the documents, return not_found: true IMMEDIATELY.
+- Do NOT infer, extrapolate, paraphrase, or assume anything beyond what is explicitly written.
+
+ANSWER REQUIREMENTS:
+- Answer is ONLY valid if it has AT LEAST ONE verified citation.
+- Answers with NO citations must be marked not_found: true.
+- Copy quotes character-for-character. Use triple-check before submitting.
+- If unsure about a quote, DO NOT include it and mark not_found: true instead.
+
+CONFIDENCE SCORING:
+- 1.0 = Fully answered with multiple verified citations
+- 0.8-0.9 = Mostly answered with 2+ citations
+- 0.6-0.7 = Partially answered with at least 1 citation
+- 0.3-0.5 = Minimal information with weak citations
+- 0.0 = not_found = true (no information in documents)
 
 Respond with ONLY valid JSON (no markdown, no ```json blocks), in this exact format:
 {
@@ -100,22 +116,43 @@ Answer the question using ONLY the reference documents above. Respond with valid
 
 def _build_batch_prompt(questions: list[dict], reference_docs: dict[str, str], strategy: str) -> str:
     """Build the user prompt for multiple questions at once.
-    If a single long-text item is passed, treat it as a raw questionnaire document."""
+    
+    Two modes:
+    - Raw mode (len(questions) == 1): Pass raw text to LLM, let it parse and split questions
+    - Normal mode (len(questions) > 1): Pre-parsed questions (e.g., from CSV), answer each one
+    
+    The LLM will intelligently handle parsing regardless of formatting:
+    - Questions separated by blank lines, newlines, or no separators
+    - Single question spanning multiple lines vs multiple questions
+    """
     doc_sections = "\n\n".join(
         f"=== {name} ===\n{content}" for name, content in reference_docs.items()
     )
 
-    # Raw questionnaire mode: one item whose text is the full document
-    if len(questions) == 1 and len(questions[0]["text"]) > 200:
+    # Raw questionnaire mode: Single item, let LLM parse and extract questions
+    if len(questions) == 1:
+        question_text = questions[0]["text"]
+        print(f"[PROMPT] Raw questionnaire mode: passing {len(question_text)} chars to LLM for parsing")
         return f"""Questionnaire Document:
-{questions[0]["text"]}
+{question_text}
 
 Reference Documents:
 {doc_sections}
 
-Extract every distinct question from the questionnaire document above. Answer each question using ONLY the reference documents. For each answer include the exact question_text as it appears in the questionnaire. Respond with valid JSON containing an "answers" array."""
+Your task:
+1. Identify and extract ALL distinct questions from the questionnaire document above
+2. For each question, answer using ONLY the reference documents
+3. Assign each question a sequential number starting at 1
+4. If you cannot find an answer for a question, set not_found: true
 
-    # Normal mode: pre-parsed numbered questions
+Important:
+- Do NOT split or fabricate questions
+- If a question spans multiple lines and is NOT separated by blank lines, treat as ONE question
+- Answer each question comprehensively with citations
+- Respond with valid JSON containing an "answers" array"""
+
+    # Normal mode: Pre-parsed numbered questions (e.g., from CSV)
+    print(f"[PROMPT] Normal mode: {len(questions)} pre-parsed question(s)")
     questions_text = "\n".join(
         f"{q['number']}. {q['text']}" for q in questions
     )
@@ -126,7 +163,10 @@ Extract every distinct question from the questionnaire document above. Answer ea
 Reference Documents:
 {doc_sections}
 
-Answer ALL questions using ONLY the reference documents above. For each answer include the question_text exactly as given. Respond with valid JSON containing an "answers" array with one object per question."""
+Answer ALL questions using ONLY the reference documents above. For each answer include the question_text exactly as given.
+- If answer is NOT found in documents, set not_found: true and answer: "Not found in the provided documents"
+- Every answer must have at least one citation or be marked not_found: true
+Respond with valid JSON containing an "answers" array with one object per question."""
 
 
 def generate_single_answer(
