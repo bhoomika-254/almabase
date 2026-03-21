@@ -253,6 +253,7 @@ export default function UploadPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   <p className="font-medium text-text-primary">{questionnaire.original_filename}</p>
+                  <span className="text-xs text-text-tertiary">({questionnaire.questions.length} question{questionnaire.questions.length !== 1 ? 's' : ''})</span>
                 </div>
                 <button
                   onClick={() => setQuestionnaire(null)}
@@ -262,9 +263,22 @@ export default function UploadPage() {
                 </button>
               </div>
               <div className="bg-gray-50 rounded-lg p-3 max-h-64 overflow-y-auto">
-                <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed">
-                  {questionnaire.questions[0]?.text}
-                </pre>
+                {questionnaire.questions.length === 1 ? (
+                  // Single raw questionnaire text
+                  <pre className="text-sm text-text-secondary whitespace-pre-wrap font-sans leading-relaxed">
+                    {questionnaire.questions[0]?.text}
+                  </pre>
+                ) : (
+                  // Multiple numbered questions (after LLM extraction)
+                  <div className="space-y-3">
+                    {questionnaire.questions.map((q) => (
+                      <div key={q.number} className="text-sm">
+                        <p className="font-medium text-text-primary">Q{q.number}</p>
+                        <p className="text-text-secondary mt-1">{q.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
